@@ -22,7 +22,6 @@
 	Last Updated: 3/3/2014   
 #>
 
-
 workflow Write-HelloWorld {
     param (
         # Optional parameter of type string. 
@@ -33,4 +32,6 @@ workflow Write-HelloWorld {
     )
 
         Write-Output "Hi $Name"
+        $cred = Get-AutomationPSCredential -Name 'DSC_IIQ_Dev'
+        Write-Output $cred
 }
