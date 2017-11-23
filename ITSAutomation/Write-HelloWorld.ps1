@@ -31,7 +31,12 @@ workflow Write-HelloWorld {
         [String]$Name = "World"
     )
 
-        Write-Output "Hi $Name"
+        "Hi $Name"
+        'Running on ' + (hostname)
         $cred = Get-AutomationPSCredential -Name 'DSC_IIQ_Dev'
-        Write-Output $cred
+        $cred.UserName
+        @{
+            Result = 'Finished'
+            User = '<' + $cred.UserName + '>'
+        }
 }
