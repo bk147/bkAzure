@@ -18,18 +18,8 @@ workflow New-PMPassword {
 
     try {
         # Get variables from SMA
-        $inSMA = Get-Module -Name RunbookConstructs -ListAvailable
-        if ($inSMA -ne $empty) {
-            [string] $genpwdkey = Get-AutomationVariable -Name 'PasswordManager_PwdGeneratorKey'
-            [string] $pwmgrApiURL = Get-AutomationVariable -Name 'PasswordManager_ServiceDNS'
-        } else {
-            if ($PwdGenKey -ne "" -and $PwdGenKey -ne $empty) {
-                $genpwdkey = $PwdGenKey            
-            } else {
-                throw "No Password generator key was specified as a parameter and not found in the SMA"
-            }
-            [string] $pwmgrApiURL = 'pwmgr.its.aau.dk'            
-        }
+        [string] $genpwdkey = Get-AutomationVariable -Name 'PasswordManager_PwdGeneratorKey'
+        [string] $pwmgrApiURL = Get-AutomationVariable -Name 'PasswordManager_ServiceDNS'
     } catch {
         throw "Cannot get the variable for the 'PwdGeneratorKey' or the 'ServiceDNS'"
     }
@@ -37,9 +27,10 @@ workflow New-PMPassword {
     #Hack to check if password contains at least one special character, as PwMgr seems to have a bug...
     $specialcharacterlist = "!@#$%^&*+/=_-"
     $nospecialchar = $true
+    $uri = "https://$pwmgrApiURL/api/generatepassword/?PasswordGeneratorID=$PwdGeneratorId&apikey=$genpwdkey"
     while ($nospecialchar -eq $true) {
         #Generate password from the pwdGeneratorId
-        $pwgenRes = Invoke-RestMethod -Method Get -Uri "https://$pwmgrApiURL/api/generatepassword/?PasswordGeneratorID=$PwdGeneratorId&apikey=$genpwdkey" -ContentType 'application/json'
+        $pwgenRes = Invoke-RestMethod -Method Get -Uri $uri -ContentType 'application/json'
         $pwd = $pwgenRes[0].Password
         #Check password for special char
         for($i = 0 ; $i -lt $specialcharacterlist.Length ; $i++)  {
