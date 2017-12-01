@@ -1,3 +1,6 @@
+#
+# vRO Certificate Should be installed on the runbook workers for this workflow to work!
+#
 workflow New-VMServer
 {
     param(
