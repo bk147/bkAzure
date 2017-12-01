@@ -23,25 +23,16 @@ workflow Add-PMAccountAndPassword {
         [string] $Creator
     )
     
+    # Get variables from SMA
     try {
-        # Get variables from SMA
-        $inSMA = Get-Module -Name RunbookConstructs -ListAvailable
-        if ($inSMA -ne $empty) {
-            [string] $pwmgrURL = Get-AutomationVariable -Name 'PasswordManager_ServiceDNS'
-        } else {
-            [string] $pwmgrURL = 'pwmgr.its.aau.dk'
-        }
+        [string] $pwmgrURL = Get-AutomationVariable -Name 'PasswordManager_ServiceDNS'
+        $PasswordLists = Get-AutomationVariable -Name 'PasswordManager_PasswordLists'
     } catch {
-        throw "Cannot get the variable for the 'PwdGeneratorKey' or the 'ServiceAPIUrl'"
+        throw "Cannot get the variable for the 'ServiceDNS' or the 'PasswordLists'"
     }
     
-    $PasswordLists = @{
-        VMServers=@{id=38;key='457df632eac89b34fb383527e9cda685'}
-        Services=@{id=39;key='724f89d3c65be3afe36b8a275c349dfd'}
-    } 
-   
     #Find the Password Generator ID for the list and generate a password from this
-    $pwdList = Invoke-RestMethod -Method Get -Uri "https://$pwmgrURL/api/passwordlists/$($PasswordLists[$PwdListName].id)?apikey=$($PasswordLists[$PwdListName].key)"
+    $pwdList = Invoke-RestMethod -Method Get -Uri "https://$pwmgrURL/api/passwordlists/$($PasswordLists.$PwdListName.id)?apikey=$($PasswordLists.$PwdListName.key)"
     $password = New-PMPassword -PwdGeneratorId $pwdList.PasswordGeneratorID
     
     #Register Password in Password Manager
@@ -54,12 +45,12 @@ workflow Add-PMAccountAndPassword {
 
     $jsonPassword = "
     {
-        'PasswordListID':'$($PasswordLists[$PwdListName].id)',
+        'PasswordListID':'$($PasswordLists.$PwdListName.id)',
         'Title':'$Title',
         'UserName':'$UserName',
         'Description':'$Description',
         'Password':'$password',
-        'APIKey':'$($PasswordLists[$PwdListName].key)',
+        'APIKey':'$($PasswordLists.$PwdListName.key)',
         'GenericField1':'$Creator'
     }
     "
