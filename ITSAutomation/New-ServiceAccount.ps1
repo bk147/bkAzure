@@ -33,19 +33,19 @@ workflow New-ServiceAccount {
     $ServiceAccountOU = "OU=Service Identities,OU=Admins,$domainDN"
     if (($SubService -eq "") -or ($SubService -eq $empty)) {
         $name = "SVC_$ServiceName"
-        $desc = "Service account for $Service"
+        $desc = "Service account for $ServiceName"
     } else {
         $name = "SVC_${ServiceName}_$SubService"
-        $desc = "Service account for $Service/$SubService"
+        $desc = "Service account for $ServiceName/$SubService"
     }
     $upn = "$name@$ServiceDomain"
 
-    $user = Get-ADUser -Filter {UserPrincipalName -eq $upn} -Server $ServiceDomain
+    $user = Get-ADUser -Filter {UserPrincipalName -eq $upn} -Server $ServiceDomain -Credential $cred
     If ($user -eq $empty) {
         $pwdinfo = Add-PMAccountAndPassword -UserName $upn -PwdListName Services -Title "Service Account $upn" -Description $desc
         $secpwd = ConvertTo-SecureString -String $pwdinfo.Password -AsPlainText -Force
     
-        Write-Verbose -Message "Creating $upn..." | Write-Host -Foreground Green
+        Write-Verbose -Message "Creating $upn..."
         New-ADUser -Name $name -AccountPassword $secpwd -Description $desc -DisplayName $name -PasswordNeverExpires $true -Path $ServiceAccountOU -UserPrincipalName $upn -Enabled $true -Manager $objManager -Server $ServiceDomain -Credential $cred
 
         @{
