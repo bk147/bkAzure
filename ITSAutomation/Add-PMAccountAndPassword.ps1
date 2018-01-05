@@ -59,7 +59,8 @@ workflow Add-PMAccountAndPassword {
     
     #Return a hashtable with relevant info...
     @{
-        password = $password
+        Username = $UserName
+        Password = $password
         PwdID = $pwdID
         Permalink = "https://$pwmgrURL/pid=$pwdID"
     }
