@@ -1,0 +1,2 @@
+
+Get-AutomationPSCredential -Name Test
