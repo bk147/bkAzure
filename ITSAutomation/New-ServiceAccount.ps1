@@ -17,10 +17,6 @@ workflow New-ServiceAccount {
     $objDomain = Get-ADDomain -Identity $ServiceDomain
     $domainDN = $objDomain.DistinguishedName
 
-    $managerDomain = $ManagerUPN.Split('@')[1]
-    $objManager = Get-ADUser -Filter {UserPrincipalName -eq $ManagerUPN} -Server $managerDomain
-    if ($objManager -eq $empty) { "Error: $ManagerUPN not found!" | Write-Host -Foreground Red ; Exit }
-
     # Get variables from SMA
     try {
         $cred = Get-AutomationPSCredential -Name SVC_SMAWorker_Writer
@@ -28,6 +24,10 @@ workflow New-ServiceAccount {
         throw "Error getting credentials from SMA variable (SVC_SMAWorker_Writer)..."
     }
 
+    $managerDomain = $ManagerUPN.Split('@')[1]
+    $objManager = Get-ADUser -Filter {UserPrincipalName -eq $ManagerUPN} -Server $managerDomain -Credential $cred
+    if ($objManager -eq $empty) { throw "$ManagerUPN not found!" }
+    
     #######################
     #Create Service Account
     $ServiceAccountOU = "OU=Service Identities,OU=Admins,$domainDN"
