@@ -24,10 +24,10 @@ workflow New-PMPassword {
         throw "Cannot get the variable for the 'PwdGeneratorKey' or the 'ServiceDNS'"
     }
     
+    $uri = "https://$pwmgrApiURL/api/generatepassword/?PasswordGeneratorID=$PwdGeneratorId&apikey=$genpwdkey"
     #Hack to check if password contains at least one special character, as PwMgr seems to have a bug...
     $specialcharacterlist = "!@#$%^&*+/=_-"
     $nospecialchar = $true
-    $uri = "https://$pwmgrApiURL/api/generatepassword/?PasswordGeneratorID=$PwdGeneratorId&apikey=$genpwdkey"
     while ($nospecialchar -eq $true) {
         #Generate password from the pwdGeneratorId
         $pwgenRes = Invoke-RestMethod -Method Get -Uri $uri -ContentType 'application/json'
