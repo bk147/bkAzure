@@ -36,6 +36,11 @@ workflow New-VMServer
 #        [ValidateSet('ws2012r2', 'ws2k16')]
         [string]
         $OSVersion = 'ws2k16',
+
+        # Domain to join - if omittet create computer without domain join
+        [Parameter(Mandatory = $false)]
+        [string]
+        $DomainFQDN,
     
         # Wait for the virtual machine to be fully created - times out after 60 minuts (valid values are: 'yes', 'no')
         [Parameter(Mandatory = $false)]
@@ -46,11 +51,9 @@ workflow New-VMServer
 #Main script...
 #####################
     $vRoApiUrl = 'https://esx-vro01.srv.aau.dk:8281/vco/api'
-#    $workflowname = 'New Windows Server'
-    $workflowid = 'ea919d9a-3735-4ae4-b3f3-ef058ac00734'
+    $workflowid = 'ea919d9a-3735-4ae4-b3f3-ef058ac00734' #'New Windows Server'
 
-#Problem with this Workflow
-    $pwd = Add-PMAccountAndPassword -UserName Administrator -PwdListName VMServers -Title "$Name" -Description "Local Administrator for $Name"
+    $pwd = Add-PMAccountAndPassword -UserName 'Administrator' -Title $Name -description "Local Administrator for $Name" -PwdListName 'VMServers'
     Write-Verbose -Message "Added password to PM"
 
     if ([string]::IsNullOrEmpty($Owner) -eq $true) { $Owner = "PowerShell" }
@@ -142,7 +145,7 @@ workflow New-VMServer
 
     #Run vRO Workflow
     try {
-        $cred = Get-AutomationPSCredential -Name SVC_SMA_vRO_Access        
+        $cred = Get-AutomationPSCredential -Name SVC_SMA_vRO_Access
         if (($cred -eq "") -or ($cred -eq $empty)) {
             throw "Error getting credentials from SMA variable (SVC_SMA_vRO_Access)..."
         }
@@ -180,6 +183,34 @@ workflow New-VMServer
                 #The following results in a: "Exception has been thrown by the target of an invocation. (An item with the same key has already been added.)" Error - dunno why!?
                 #Write-Verbose -Message "Server got ip: <" + $ip + ">"
                 Write-Verbose -Message "Server got ip: <$ip>"
+
+                $pwd.Password
+
+                if (($DomainFQDN -eq $empty) -or ($DomainFQDN -eq "")) {
+                    #Configure DSC to use Azure DSC
+                    [string] $strTopDir = Get-AutomationVariable -Name 'DSC_InstallTopDirectory'
+                    InlineScript {
+                        $LCMScript = 'InstallDscLCMv2.ps1'
+                        $dscLCMScript = "$using:strTopDir\DSCLCM\$LCMScript"
+                        $secPwd = ConvertTo-SecureString -String $using:pwd.password -AsPlainText -Force
+                        $hostCred = New-Object System.Management.Automation.PSCredential("localhost\Administrator",$secPwd)
+                        $session = New-PSSession -ComputerName $using:ip -Credential $hostCred
+
+                        #Create destination path if necessary and copy the LCM script...
+                        #The copy-item assumes that the Automation Server used for the copy has rights to the installtopfolder
+                        $instPath = "C:\_install"    #Problem using this in the next line...
+                        Invoke-Command -Session $session -ScriptBlock { If (!(Test-Path -Path 'C:\_install')) { New-Item -Path 'C:\_install' -ItemType Directory }}
+                        Copy-Item -Path $dscLCMScript -Destination $instPath -ToSession $session
+                        #Compile the LCM and set it up...
+                        Invoke-Command -Session $session -ScriptBlock {
+                            Set-Location -Path "C:\_install"
+                            & ".\InstallDscLCMv2.ps1" -NodeConfigurationName 'DSC_Admt_GenericDomainJoin.localhost'
+                            Set-DscLocalConfigurationManager -Path ".\DscMetaConfigs"
+                        }
+                        Remove-PSSession -Session $session
+                    }
+                }
+
                 @{
                     Status = 'Completed'
                     Message = "Finished creating $name"
