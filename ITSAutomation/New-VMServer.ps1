@@ -184,36 +184,48 @@ workflow New-VMServer
                 #Write-Verbose -Message "Server got ip: <" + $ip + ">"
                 Write-Verbose -Message "Server got ip: <$ip>"
 
-                $pwd.Password
+                #Configure and use Azure DSC
+                #!!!Error handling should be implemented...
+                [string] $strTopDir = Get-AutomationVariable -Name 'DSC_InstallTopDirectory'
+                InlineScript {
+                    $LCMScript = 'InstallDscLCMv2.ps1'
+                    $dscLCMScript = "$using:strTopDir\DSCLCM\$LCMScript"
+                    $secPwd = ConvertTo-SecureString -String $using:pwd.password -AsPlainText -Force
+                    $hostCred = New-Object System.Management.Automation.PSCredential("localhost\Administrator",$secPwd)
+                    $session = New-PSSession -ComputerName $using:ip -Credential $hostCred
 
-                if (($DomainFQDN -eq $empty) -or ($DomainFQDN -eq "")) {
-                    #Configure DSC to use Azure DSC
-                    [string] $strTopDir = Get-AutomationVariable -Name 'DSC_InstallTopDirectory'
-                    InlineScript {
-                        $LCMScript = 'InstallDscLCMv2.ps1'
-                        $dscLCMScript = "$using:strTopDir\DSCLCM\$LCMScript"
-                        $secPwd = ConvertTo-SecureString -String $using:pwd.password -AsPlainText -Force
-                        $hostCred = New-Object System.Management.Automation.PSCredential("localhost\Administrator",$secPwd)
-                        $session = New-PSSession -ComputerName $using:ip -Credential $hostCred
-
-                        #Create destination path if necessary and copy the LCM script...
-                        #The copy-item assumes that the Automation Server used for the copy has rights to the installtopfolder
-                        $instPath = "C:\_install"    #Problem using this in the next line...
-                        Invoke-Command -Session $session -ScriptBlock { If (!(Test-Path -Path 'C:\_install')) { New-Item -Path 'C:\_install' -ItemType Directory }}
-                        Copy-Item -Path $dscLCMScript -Destination $instPath -ToSession $session
-                        #Compile the LCM and set it up...
-                        Invoke-Command -Session $session -ScriptBlock {
-                            Set-Location -Path "C:\_install"
-                            & ".\InstallDscLCMv2.ps1" -NodeConfigurationName 'DSC_Admt_GenericDomainJoin.localhost'
-                            Set-DscLocalConfigurationManager -Path ".\DscMetaConfigs"
-                        }
-                        Remove-PSSession -Session $session
+                    #Determine initial configuration name
+                    if (($DomainFQDN -eq $empty) -or ($DomainFQDN -eq "")) {
+                        $configName = 'DSC_Empty.Empty'
+                    } else {
+                        $dom = $DomainFQDN.Split('.')[0].Replace('-','')
+                        $configName = "DSC_${dom}_GenericDomainJoin.localhost"
                     }
+
+                    #Create destination path if necessary and copy the LCM script...
+                    #The copy-item assumes that the Automation Server used for the copy has rights to the installtopfolder
+                    $instPath = "C:\_install"
+                    $argList = @{ instPath = $instPath }
+                    Invoke-Command -Session $session -ArgumentList $argList -ScriptBlock {
+                        If (!(Test-Path -Path $args.instPath)) { New-Item -Path $args.instPath -ItemType Directory }
+                    }
+                    Copy-Item -Path $dscLCMScript -Destination $instPath -ToSession $session
+
+                    #Compile the LCM and set it up...
+                    $argList = @{config=$configName ; instPath=$instPath ; LCMScript=$LCMScript}
+                    Invoke-Command -Session $session -ArgumentList $argList -ScriptBlock {
+                        Set-Location -Path $args.instPath
+                        & ".\$($args.LCMScript)" -NodeConfigurationName $args.config
+                        Set-DscLocalConfigurationManager -Path ".\DscMetaConfigs"
+                    }
+
+                    #Cleanup by removing the session
+                    Remove-PSSession -Session $session
                 }
 
                 @{
                     Status = 'Completed'
-                    Message = "Finished creating $name"
+                    Message = "Finished creating $name and activating Azure DSC"
                     PasswordURL = $($pwd.Permalink)
                     Ip = $ip
                 }
