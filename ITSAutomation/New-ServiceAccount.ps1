@@ -7,6 +7,7 @@ workflow New-ServiceAccount {
         [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true,Position=1)]
         [string] $ServiceDomain,
         
+        #UPN for the manager object (for now we only support User accounts - should be group at some point!)
         [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true,Position=2)]
         [string] $ManagerUPN,
 
@@ -18,7 +19,7 @@ workflow New-ServiceAccount {
     try {
         $cred = Get-AutomationPSCredential -Name SVC_SMAWorker_Writer
     } catch {
-        throw "Error getting credentials from SMA variable (SVC_SMAWorker_Writer)..."
+        throw "Error getting credentials from SMA variable (SVC_SMAWorker_Writer@srv.aau.dk)..."
     }
 
     $objDomain = Get-ADDomain -Identity $ServiceDomain
@@ -80,6 +81,7 @@ workflow New-ServiceAccount {
     #Set the manager and info - has to be Inline as Manager cannot be set otherwise using Workflows...
     InlineScript {
         $managerinfo = "Manager: '" + $using:managerUPN + "' [" + (Get-Date).ToString() + "]"
+        $managerinfo += "`r`nPasswordLink: " + ($Using:pwdinfo).Permalink
         $managerObj = Get-ADUser -Identity $($Using:ManagerUPN).Split('@')[0] -Server $Using:managerDomain -ErrorAction Stop
 
         $user = Get-ADUser -Identity $($Using:upn).Split('@')[0] -Server $Using:ServiceDomain -Properties info -ErrorAction Stop
@@ -92,7 +94,7 @@ workflow New-ServiceAccount {
         $user | Set-ADUser -Server $using:ServiceDomain -Manager $managerObj -Replace @{info=$info} -Credential $using:cred
     }
     $result += @{
-        AdditionalInfo = 'Manager set to $ManagerUPN and info set accordingly.'
+        AdditionalInfo = "Manager set to $ManagerUPN and info added accordingly."
     }
 
     $result
