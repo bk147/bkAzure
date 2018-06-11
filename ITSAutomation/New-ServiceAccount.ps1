@@ -15,7 +15,7 @@ workflow New-ServiceAccount {
         [string] $SubService
     )
 
-    # Get variables from SMA
+    # Get credential from SMA
     try {
         $cred = Get-AutomationPSCredential -Name SVC_SMAWorker_Writer
     } catch {
