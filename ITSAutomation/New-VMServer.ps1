@@ -125,7 +125,6 @@ workflow New-VMServer
         $parameterlist += CreateStringVar -name 'vmAppAdm' -value $Using:Owner #Needs to be changed
         $parameterlist += CreateSecureStringVar -name 'vmPasswordSecure' -value $Using:pwd.password
         $parameterlist += CreateStringVar -name 'vmLocation' -value $Using:Datacenter
-#        $parameterlist += CreateStringVar -name 'vmFolderName' -value 'New vm DC2'
         $parameterlist += CreateBooleanVar -name 'startVM' -value $true
         
         if ([string]::IsNullOrEmpty($Using:IPAddress) -eq $true) {
@@ -196,8 +195,10 @@ workflow New-VMServer
                 $ip = ($res.'output-parameters' | Where-Object Name -eq 'arg_out_IPaddress').value.string.value
                 Write-Verbose -Message "Password available from $($pwd.Permalink) - please move the password to the correct password list!"
                 Write-Verbose -Message "Finished creating server ($name)"
+                #The following results in a: "Exception has been thrown by the target of an invocation. (An item with the same key has already been added.)" Error - dunno why!?
+                #Write-Verbose -Message "Server got ip: <" + $ip + ">"
                 Write-Verbose -Message "Server got ip: <$ip>"
-Write-Verbose -Message "Pwd: $($pwd.password)"
+#Write-Verbose -Message "Pwd: $($pwd.password)"
 
                 if ($UseDSC.ToLower() -ne 'no') {
                     #Configure and use Azure DSC
