@@ -9,11 +9,10 @@ workflow New-VMServer
         [string]
         $Name,
     
-        # This parameter specifies the name of the vlan to use - if omittet the test1 vlan is used...
+        # This parameter specifies the name of the vlan to use - if omittet the Test vlan is used...
         [Parameter(Mandatory = $false)]
         [string]
-        $VlanName = 'test1',
-#        $VlanName,
+        $VlanName,
     
         # Used if static ip addresses is used - the format is in IDR (ex: 172.11.12.13/25)
         [Parameter(Mandatory = $false)]
@@ -21,11 +20,11 @@ workflow New-VMServer
         [string]
         $IPAddress,
     
-        # Datacenter - if empty VMWare selects the most appropriate in primary DC
+        # Datacenter
         [Parameter(Mandatory = $false)]
-#        [ValidateSet('dc2', 'slvd', 'hosting', 'dc2-infrastructure', 'dc2-infrastructure2', 'dc2-hosting2', 'slvd-infrastructures')]
+#        [ValidateSet('dc2-old', 'dc2-new', 'slvd', 'hosting')]
         [string]
-        $Datacenter, 
+        $Datacenter = 'dc2-new',
     
         # Owner
         [Parameter(Mandatory = $false)]
@@ -56,8 +55,8 @@ workflow New-VMServer
 #####################
 #Main script...
 #####################
-    $vRoApiUrl = 'https://esx-vro03.srv.aau.dk:8281/vco/api'
-    $workflowname = 'New-WindowsServer'
+    $vRoApiUrl = 'https://esx-vro01.srv.aau.dk:8281/vco/api'
+    $workflowid = 'ea919d9a-3735-4ae4-b3f3-ef058ac00734' #'New Windows Server'
 
     $pwd = Add-PMAccountAndPassword -UserName 'Administrator' -Title $Name -description "Local Administrator for $Name" -PwdListName 'VMServers'
     Write-Verbose -Message "Added password to PM"
@@ -159,16 +158,10 @@ workflow New-VMServer
         throw "Error getting credentials..."
     }
 
-    #Get workflowid from workflow name
-    $apiendpoint = "$vRoApiUrl/workflows?conditions=name=$workflowname"
-    $res = Invoke-RestMethod -Uri $apiendpoint -Credential $cred
-    $workflowid = ($res.link.attributes | Where-Object { $_.Name -eq 'id'}).value
-
     $apiendpoint = "$vRoApiUrl/workflows/$workflowid/executions"
 
     # The following returns important info in Headers.Location!
     $r = Invoke-WebRequest -Method Post -Uri $apiendpoint -Credential $cred -Body $myjson -ContentType "application/json" -UseBasicParsing
-
     $executionpath = $r.Headers.Location
     Write-Verbose -Message "Execution: $executionpath"
 
@@ -182,14 +175,11 @@ workflow New-VMServer
         while (($finished -eq $false) -and ([DateTime]::Now -le $timeoutTime)) {
             $res = Invoke-RestMethod -Uri $executionpath -Method Get -Credential $cred
             if ($res.state -eq 'failed') {
-                $strException = $res.'content-exception'
                 $finished = $true
                 @{
                     Status = 'Failed'
                     Message = "Failed vRO execution... [$executionpath]"
-                    Exception = $strException
                 }
-                throw "Error executing vRO workflow..."
             } elseif ($res.state -eq 'completed') {
                 $finished = $true
                 $ip = ($res.'output-parameters' | Where-Object Name -eq 'arg_out_IPaddress').value.string.value
@@ -198,18 +188,16 @@ workflow New-VMServer
                 #The following results in a: "Exception has been thrown by the target of an invocation. (An item with the same key has already been added.)" Error - dunno why!?
                 #Write-Verbose -Message "Server got ip: <" + $ip + ">"
                 Write-Verbose -Message "Server got ip: <$ip>"
-#Write-Verbose -Message "Pwd: $($pwd.password)"
 
                 if ($UseDSC.ToLower() -ne 'no') {
                     #Configure and use Azure DSC
                     #!!!Error handling should be implemented...
-                    Write-Verbose "Running DSC setup"
                     [string] $strTopDir = Get-AutomationVariable -Name 'DSC_InstallTopDirectory'
-                    Start-Sleep -Seconds 120
                     $res = InlineScript {
+                        $LCMScript = 'InstallDscLCMv2.ps1'
+                        $dscLCMScript = "$Using:strTopDir\DSCLCM\$LCMScript"
                         $secPwd = ConvertTo-SecureString -String $Using:pwd.password -AsPlainText -Force
                         $hostCred = New-Object System.Management.Automation.PSCredential("localhost\Administrator",$secPwd)
-                        "Pwd..."
                         $session = New-PSSession -ComputerName $Using:ip -Credential $hostCred
 
                         #Determine initial configuration name
@@ -227,8 +215,6 @@ workflow New-VMServer
                         $res = Invoke-Command -Session $session -ArgumentList $argList -ScriptBlock {
                             If (!(Test-Path -Path $args.instPath)) { New-Item -Path $args.instPath -ItemType Directory }
                         }
-                        $LCMScript = 'InstallDscLCM.ps1'
-                        $dscLCMScript = "$Using:strTopDir\DSCLCM\$LCMScript"
                         Copy-Item -Path $dscLCMScript -Destination $instPath -ToSession $session
 
                         #Compile the LCM Configuration and set it up...
@@ -243,12 +229,11 @@ workflow New-VMServer
                         Remove-PSSession -Session $session
 
                         #Return configName
-                        @{ configname = $configName }
+                        $configName
                     }
                     $DSCMessage = "Azure DSC IS enabled. [$res]"
                     $DSCEnabled = $true
                 } else {
-                    Write-Verbose "NOT running DSC setup"
                     $DSCMessage = 'Azure DSC NOT enabled.'
                     $DSCEnabled = $false
                 }
