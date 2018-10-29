@@ -7,7 +7,6 @@ workflow New-ServiceAccount {
         [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true,Position=1)]
         [string] $ServiceDomain,
         
-        #UPN for the manager object (for now we only support User accounts - should be group at some point!)
         [Parameter(Mandatory=$true, ValueFromPipelineByPropertyName=$true,Position=2)]
         [string] $ManagerUPN,
 
@@ -15,7 +14,14 @@ workflow New-ServiceAccount {
         [string] $SubService
     )
 
-    # Get credential from SMA
+#
+# SamAccount name can max. be 20 characters. As we use SVC_ for simple services and SVC_<service>_<subservice>
+# We can only use either 16 characters for simple services or 15 characerts for the service name + subservice name for subservices.
+# We should enforce this or find a new strategy for nameing services (and groups) - e.g. using short names for samAccountName
+# or using different display/upn and sam names...
+#
+
+    # Get variables from SMA
     try {
         $cred = Get-AutomationPSCredential -Name SVC_SMAWorker_Writer
     } catch {
