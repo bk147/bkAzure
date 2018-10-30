@@ -10,15 +10,10 @@ workflow Remove-IPamIPAddress {
     )
 
     #Static variables - should probably be set as a hashtable in an AutomationVariable...
-#    $serviceinfo = Get-AutomationVariable -Name IpamInfo
-    $serviceinfo = @{
-        AppID = 'winnsx'
-        Url = 'http://ipam02.srv.aau.dk'
-        User = 'bk@its.aau.dk:nopassword'
-    }
+    $serviceinfo = Get-AutomationVariable -Name 'IPam_ServiceInfo'
 
     #Get Token for further calls to the API
-    #Maybe the user/password should be stored as Base64 in the above Automation Variable instead of doint the convertion here !?
+    #Maybe the user/password should be stored as Base64 in the above Automation Variable instead of doing the convertion here !?
     $base64Token = [convert]::ToBase64String([char[]]$serviceinfo.user)
     $headers=@{ Authorization="Basic $base64Token" }
     $res = Invoke-RestMethod -Method Post -Uri "$($serviceinfo.Url)/api/$($serviceinfo.AppID)/user/" -Headers $headers
