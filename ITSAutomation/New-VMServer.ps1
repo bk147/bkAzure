@@ -9,11 +9,10 @@ workflow New-VMServer
         [string]
         $Name,
     
-        # This parameter specifies the name of the vlan to use - if omittet the test1 vlan is used...
+        # This parameter specifies the name of the vlan to use - if omittet the NSXVlan for admin will be used...
         [Parameter(Mandatory = $false)]
         [string]
-        $VlanName = 'test1',
-#        $VlanName,
+        $VlanName,
     
         # Used if static ip addresses is used - the format is in IDR (ex: 172.11.12.13/25)
         [Parameter(Mandatory = $false)]
@@ -58,11 +57,22 @@ workflow New-VMServer
 #####################
     $vRoApiUrl = 'https://esx-vro03.srv.aau.dk:8281/vco/api'
     $workflowname = 'New-WindowsServer'
+    $NSXVlan = 'vxw-dvs-783-virtualwire-24-sid-5001-LS-a-win'
 
     $pwd = Add-PMAccountAndPassword -UserName 'Administrator' -Title $Name -description "Local Administrator for $Name" -PwdListName 'VMServers'
     Write-Verbose -Message "Added password to PM"
 
     if ([string]::IsNullOrEmpty($Owner) -eq $true) { $Owner = "PowerShell" }
+
+    #If no vlan is given, then use the NSX Vlan for "LS-a-win"
+    if ($VlanName -eq $empty) {
+        $VlanName = $NSXVlan
+        if ($Name -like "*.*") { $fqdn = $Name } else { $fqdn = $Name + "." + $DomainFQDN }
+        $ipaminfo = New-IPamIPAddress -Owner $Owner -Hostname $fqdn -Description "Server created by New-VMServer Automation [This is a placeholder]"
+        if ($ipaminfo.Result.ToLower() -eq "success") {
+            $IPAddress = "$($ipaminfo.IPAddress)/22" #This info should come from IPAM, but GW is not defined
+        }
+    }
 
     #Using inlinescript to remove extra parameters such as PSComputerName,PSShowComputerName,PSSourceJobInstanceId
     $myjson = InlineScript {
@@ -125,6 +135,7 @@ workflow New-VMServer
         $parameterlist += CreateStringVar -name 'vmAppAdm' -value $Using:Owner #Needs to be changed
         $parameterlist += CreateSecureStringVar -name 'vmPasswordSecure' -value $Using:pwd.password
         $parameterlist += CreateStringVar -name 'vmLocation' -value $Using:Datacenter
+#        $parameterlist += CreateStringVar -name 'vmFolderName' -value 'New vm DC2'
         $parameterlist += CreateBooleanVar -name 'startVM' -value $true
         
         if ([string]::IsNullOrEmpty($Using:IPAddress) -eq $true) {
@@ -198,7 +209,7 @@ workflow New-VMServer
                 #The following results in a: "Exception has been thrown by the target of an invocation. (An item with the same key has already been added.)" Error - dunno why!?
                 #Write-Verbose -Message "Server got ip: <" + $ip + ">"
                 Write-Verbose -Message "Server got ip: <$ip>"
-#Write-Verbose -Message "Pwd: $($pwd.password)"
+Write-Verbose -Message "Pwd: $($pwd.password)"
 
                 if ($UseDSC.ToLower() -ne 'no') {
                     #Configure and use Azure DSC
