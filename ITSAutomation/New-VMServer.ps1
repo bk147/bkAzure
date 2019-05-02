@@ -1,6 +1,9 @@
 #
 # vRO Certificate Should be installed on the runbook workers for this workflow to work!
 #
+# Adding to Azure Dev:
+# Import-AzureRmAutomationRunbook -ResourceGroupName 'AutomationGroup' -AutomationAccountName 'ifsAutomationDev' -Path .\ITSAutomation\New-VMServer.ps1 -Description 'Creating a standard Windows VM Server' -Name New-VMServer -Type PowerShellWorkflow -Published -Force
+#
 workflow New-VMServer
 {
     param(
@@ -41,6 +44,11 @@ workflow New-VMServer
         [Parameter(Mandatory = $false)]
         [string]
         $DomainFQDN,
+
+        # Description for the virtual machine
+        [Parameter(Mandatory = $false)]
+        [string]
+        $Description = "No description",
         
         # Use Azure DSC - default is that Azure DSC is enabled
         [Parameter(Mandatory = $false)]
@@ -57,7 +65,11 @@ workflow New-VMServer
 #####################
     $vRoApiUrl = 'https://esx-vro03.srv.aau.dk:8281/vco/api'
     $workflowname = 'New-WindowsServer'
-    $NSXVlan = 'vxw-dvs-783-virtualwire-24-sid-5001-LS-a-win'
+    $NSXVlan = 'vxw-dvs-783-virtualwire-39-sid-5010-LS-unique-2-manuel'     #Access from AAU,DC
+#Wiki info: https://net-wiki.aau.dk/wiki/Netværks-design_til_NSX
+#    $NSXVlan = 'vxw-dvs-783-virtualwire-38-sid-5009-LS-global-2-manuel'    #Access from Internet,AAU,DC
+#    $NSXVlan = 'vxw-dvs-783-virtualwire-39-sid-5010-LS-unique-2-manuel'    #Access from AAU,DC
+#    $NSXVlan = 'vxw-dvs-783-virtualwire-37-sid-5008-LS-local-2-manuel'     #Access from DC
 
     $pwd = Add-PMAccountAndPassword -UserName 'Administrator' -Title $Name -description "Local Administrator for $Name" -PwdListName 'VMServers'
     Write-Verbose -Message "Added password to PM"
@@ -68,7 +80,7 @@ workflow New-VMServer
     if ($VlanName -eq $empty) {
         $VlanName = $NSXVlan
         if ($Name -like "*.*") { $fqdn = $Name } else { $fqdn = $Name + "." + $DomainFQDN }
-        $ipaminfo = New-IPamIPAddress -Owner $Owner -Hostname $fqdn -Description "Server created by New-VMServer Automation [This is a placeholder]"
+        $ipaminfo = New-IPamIPAddress -Owner $Owner -Hostname $fqdn -Description $Description
         if ($ipaminfo.Result.ToLower() -eq "success") {
             $IPAddress = "$($ipaminfo.IPAddress)/22" #This info should come from IPAM, but GW is not defined
         }
