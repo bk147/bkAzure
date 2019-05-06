@@ -20,7 +20,7 @@ configuration DSC_admt_GenericDomainJoin
             GroupName = 'Administrators'
             MembersToInclude = 'IT CoreMgmt Admins@srv.aau.dk'
             Credential = $cred
-            DependsOn = '[xComputer]AdmtJoin'
+            DependsOn = '[xComputer]DomainJoin'
         }
 
         xWindowsFeature RSATADTools {
