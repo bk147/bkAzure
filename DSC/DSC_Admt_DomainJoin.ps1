@@ -15,13 +15,12 @@ configuration DSC_Admt_DomainJoin
             JoinOU = $Node.OU
         }
 
-        Script AddCoreMgmtAdminsToLocalAdministrators {
-            GetScript = {
-                $res = (Get-LocalgroupMember -Group Administrators).Name -contains 'SRV\IT CoreMgmt Admins'
-                @{ Result = $res }
-            }
-            SetScript = { Add-LocalGroupMember -Group Administrators -Member 'SRV\IT CoreMgmt Admins' }
-            TestScript = { [bool] ((Get-LocalGroupMember -Group Administrators).Name -eq ('SRV\IT CoreMgmt Admins'))}
+        xGroup LocalAdministrators {
+            Ensure = 'Present'
+            GroupName = 'Administrators'
+            MembersToInclude = 'IT CoreMgmt Admins@srv.aau.dk'
+            Credential = $cred
+            DependsOn = '[xComputer]AdmtJoin'
         }
 
         xWindowsFeature RSATADTools {
