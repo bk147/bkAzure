@@ -3,6 +3,15 @@
 #
 # WARNING: NO ERROR HANDLING IMPLEMENTED YET
 #
+# BUG: If Description is too long (<=64 chars) we get the following exception back:
+# {"code":500,"success":0,"message":"Error: SQLSTATE[22001]: String data, right truncated: 1406 Data too long for column 'description' at row 1","time":0.04} (The remote server returned an error: (500) Internal Server Error.)
+# Further there might be a problem using certain characters. Initial Description:
+# 'Server used for presenting debit/kredit files in the QlikView system. ØA has an application where certain users can see their files by clicking on a link.'
+# after problems did:
+# 'Server used for presenting debitkredit files in the QlikView system. OEA has an application where certain users can see their files by clicking on a link.'
+# Working: 'Server used for getting debit/kredit files in QlikView.'
+#
+#
 # MISSING:
 # 1) We should get some basic info back from IPAM (subnet info, gateway) - gateway is not simple, DNS should also be returned
 # 2) We should be able to use a CIDR to get the necessary subnet OR a subnet NAME.
@@ -23,12 +32,12 @@
 #}
 #
 # Adding to Azure Dev:
-# Import-AzureRmAutomationRunbook -ResourceGroupName 'AutomationGroup' -AutomationAccountName 'ifsAutomationDev' -Path .\ITSAutomation\New-IPamIPAddress.ps1 -Description 'Getting and reserving an IPAddress from IPAM' -Name New-IPamIPAddress -Type PowerShellWorkflow -Published -Force
+# Import-AzureRmAutomationRunbook -ResourceGroupName 'AutomationGroup' -AutomationAccountName 'ifsAutomationDev' -Path .\ITSAutomation\New-IPamIPAddress.ps1 -Description 'Getting and reserving an IPAddress from IPAM' -Name New-IPamIPAddress -Type PowerShellWorkflow -Published -Force -LogVerbose $true
 #
 workflow New-IPamIPAddress {
     param (
         #Subnet in CIDR format
-        [string] $CIDRSubnet = '172.18.128.0/22',
+        [string] $CIDRSubnet = '192.38.49.0/24',
 
         #Owner should be in UPN format
         [string] $Owner = 'OwnerPlaceholder',
@@ -53,6 +62,11 @@ workflow New-IPamIPAddress {
     #Get subnet info from a CIDR
     $subnet = (Invoke-RestMethod -Method Get -Uri "$($serviceinfo.Url)/api/$($serviceinfo.AppID)/subnets/cidr/$CIDRSubnet/" -Headers @{token=$token} -Credential $cred).data
 
+    if ($Description.Length -gt 64) {
+        #The IPAM module supports up to 64 characters - do a truncation
+        $Description = $Description.Substring(0,64-3) + "..."
+    }
+
     #Prepare the body as json - We have to use InlineScript to remove extra attributes after doing a ConvertTo-Json (PSComputerName,PSShowComputerName,PSSourceJobInstanceId)
     $body = InlineScript {
         @{
@@ -61,7 +75,8 @@ workflow New-IPamIPAddress {
         description = $Using:Description
         } | ConvertTo-Json
     }
-    $newip = Invoke-RestMethod -Method Post -Uri "$($serviceinfo.Url)/api/$($serviceinfo.AppID)/addresses/first_free/$($subnet.id)/" -Headers @{token=$token ; 'Content-Type'='application/json'} -Body $body -Credential $cred
+    Write-Verbose -Message "JSON: [$body]"
+    $newip = Invoke-RestMethod -Method Post -Uri "$($serviceinfo.Url)/api/$($serviceinfo.AppID)/addresses/first_free/$($subnet.id)/" -Headers @{token=$token} -ContentType "application/json; charset=utf-8" -Body $body -Credential $cred
 
     #Setup basic variables
     $ip = $newip.data
